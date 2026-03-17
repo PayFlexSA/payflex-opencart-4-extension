@@ -1,0 +1,19 @@
+# Whitelist-based .gitignore
+# Assumes this repo root may also be (or be merged into) an active OC4 install.
+# Everything is ignored by default; only the files we own are tracked.
+
+# Step 1: ignore everything
+*
+
+# Step 2: un-ignore the files we own
+!.gitignore
+!CLAUDE.md
+
+# Payflex_output (only the script, not any built zips)
+!Payflex_output/
+!Payflex_output/create_zip.sh
+
+# Extension source files
+!extension/
+!extension/payflex/
+!extension/payflex/**

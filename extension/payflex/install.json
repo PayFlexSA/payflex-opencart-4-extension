@@ -1,0 +1,8 @@
+{
+    "name": "Payflex",
+    "code": "payflex",
+    "description": "Payflex Buy Now Pay Later payment gateway for OpenCart 4",
+    "version": "1.0.0",
+    "author": "Payflex",
+    "link": "https://www.payflex.co.za"
+}

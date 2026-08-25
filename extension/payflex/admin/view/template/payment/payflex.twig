@@ -1,0 +1,262 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <div class="float-end">
+        <button type="submit" form="form-payflex" data-bs-toggle="tooltip" title="{{ button_save }}" class="btn btn-primary">
+          <i class="fa-solid fa-floppy-disk"></i>
+        </button>
+        <a href="{{ back }}" data-bs-toggle="tooltip" title="{{ button_back }}" class="btn btn-light">
+          <i class="fa-solid fa-reply"></i>
+        </a>
+      </div>
+      <h1>{{ heading_title }}</h1>
+      <ol class="breadcrumb">
+        {% for breadcrumb in breadcrumbs %}
+          <li class="breadcrumb-item"><a href="{{ breadcrumb.href }}">{{ breadcrumb.text }}</a></li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+
+  <div class="container-fluid">
+    <div class="card">
+      <div class="card-header">
+        <i class="fa-solid fa-pencil"></i> {{ text_edit }}
+      </div>
+      <div class="card-body">
+        <form id="form-payflex" action="{{ save }}" method="post" data-oc-toggle="ajax">
+
+          {# ── Tabs ─────────────────────────────────────────────────────────── #}
+          <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item">
+              <a class="nav-link active" data-bs-toggle="tab" href="#tab-general">{{ tab_general }}</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" data-bs-toggle="tab" href="#tab-order-statuses">{{ tab_order_statuses }}</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" data-bs-toggle="tab" href="#tab-widget">{{ tab_widget }}</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" data-bs-toggle="tab" href="#tab-cron">{{ tab_cron }}</a>
+            </li>
+          </ul>
+
+          <div class="tab-content">
+
+            {# ── General ──────────────────────────────────────────────────── #}
+            <div id="tab-general" class="tab-pane active">
+
+              {# Status #}
+              <div class="row mb-3">
+                <label class="col-sm-3 col-form-label">{{ entry_status }}</label>
+                <div class="col-sm-9">
+                  <div class="form-check form-switch form-switch-lg">
+                    <input type="hidden" name="payment_payflex_status" value="0"/>
+                    <input type="checkbox" name="payment_payflex_status" value="1"
+                           id="input-status" class="form-check-input"
+                           {% if payment_payflex_status %} checked{% endif %}/>
+                  </div>
+                </div>
+              </div>
+
+              {# Environment #}
+              <div class="row mb-3">
+                <label for="input-environment" class="col-sm-3 col-form-label">{{ entry_environment }}</label>
+                <div class="col-sm-9">
+                  <select name="payment_payflex_environment" id="input-environment" class="form-select">
+                    <option value="sandbox"    {% if payment_payflex_environment == 'sandbox'    %} selected{% endif %}>{{ text_sandbox }}</option>
+                    <option value="production" {% if payment_payflex_environment == 'production' %} selected{% endif %}>{{ text_production }}</option>
+                  </select>
+                </div>
+              </div>
+
+              {# Client ID #}
+              <div class="row mb-3 required">
+                <label for="input-client-id" class="col-sm-3 col-form-label">{{ entry_client_id }}</label>
+                <div class="col-sm-9">
+                  <input type="text" name="payment_payflex_client_id"
+                         value="{{ payment_payflex_client_id }}"
+                         placeholder="{{ entry_client_id }}"
+                         id="input-client-id" class="form-control"/>
+                  <div id="error-client-id" class="invalid-feedback"></div>
+                  <div class="form-text">{{ help_client_id }}</div>
+                </div>
+              </div>
+
+              {# Client Secret #}
+              <div class="row mb-3 required">
+                <label for="input-client-secret" class="col-sm-3 col-form-label">{{ entry_client_secret }}</label>
+                <div class="col-sm-9">
+                  <input type="password" name="payment_payflex_client_secret"
+                         value="{{ payment_payflex_client_secret }}"
+                         placeholder="{{ entry_client_secret }}"
+                         id="input-client-secret" class="form-control"
+                         autocomplete="new-password"/>
+                  <div id="error-client-secret" class="invalid-feedback"></div>
+                  <div class="form-text">{{ help_client_secret }}</div>
+                </div>
+              </div>
+
+              {# Sort Order #}
+              <div class="row mb-3">
+                <label for="input-sort-order" class="col-sm-3 col-form-label">{{ entry_sort_order }}</label>
+                <div class="col-sm-9">
+                  <input type="number" name="payment_payflex_sort_order"
+                         value="{{ payment_payflex_sort_order }}"
+                         placeholder="{{ entry_sort_order }}"
+                         id="input-sort-order" class="form-control" style="width:100px"/>
+                </div>
+              </div>
+
+              {# Debug Mode #}
+              <div class="row mb-3">
+                <label class="col-sm-3 col-form-label">{{ entry_debug }}</label>
+                <div class="col-sm-9">
+                  <div class="form-check form-switch form-switch-lg">
+                    <input type="hidden" name="payment_payflex_debug" value="0"/>
+                    <input type="checkbox" name="payment_payflex_debug" value="1"
+                           id="input-debug" class="form-check-input"
+                           {% if payment_payflex_debug %} checked{% endif %}/>
+                  </div>
+                  <div class="form-text">{{ help_debug }}</div>
+                </div>
+              </div>
+
+            </div>{# /tab-general #}
+
+            {# ── Order Statuses ───────────────────────────────────────────── #}
+            <div id="tab-order-statuses" class="tab-pane">
+
+              {% set status_fields = [
+                { id: 'pending',   entry: entry_order_status_pending,   key: 'payment_payflex_order_status_pending_id',   default_id: 1  },
+                { id: 'approved',  entry: entry_order_status_approved,  key: 'payment_payflex_order_status_approved_id',  default_id: 2  },
+                { id: 'failed',    entry: entry_order_status_failed,    key: 'payment_payflex_order_status_failed_id',    default_id: 10 },
+                { id: 'cancelled', entry: entry_order_status_cancelled, key: 'payment_payflex_order_status_cancelled_id', default_id: 7  },
+                { id: 'expired',   entry: entry_order_status_expired,   key: 'payment_payflex_order_status_expired_id',   default_id: 14 }
+              ] %}
+
+              {% for field in status_fields %}
+                <div class="row mb-3">
+                  <label for="input-order-status-{{ field.id }}" class="col-sm-3 col-form-label">{{ field.entry }}</label>
+                  <div class="col-sm-9">
+                    <select name="{{ field.key }}" id="input-order-status-{{ field.id }}" class="form-select">
+                      {% set current = attribute(_context, field.key) %}
+                      {% for order_status in order_statuses %}
+                        {% if order_status.order_status_id == field.default_id %}
+                          <option value="{{ order_status.order_status_id }}"{% if order_status.order_status_id == current %} selected{% endif %}>{{ order_status.name }}</option>
+                        {% endif %}
+                      {% endfor %}
+                      {% for order_status in order_statuses %}
+                        {% if order_status.order_status_id != field.default_id %}
+                          <option value="{{ order_status.order_status_id }}"{% if order_status.order_status_id == current %} selected{% endif %}>{{ order_status.name }}</option>
+                        {% endif %}
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              {% endfor %}
+
+            </div>{# /tab-order-statuses #}
+
+            {# ── Product Widget ───────────────────────────────────────────── #}
+            <div id="tab-widget" class="tab-pane">
+
+              {# Enable widget #}
+              <div class="row mb-3">
+                <label class="col-sm-3 col-form-label">{{ entry_product_widget }}</label>
+                <div class="col-sm-9">
+                  <div class="form-check form-switch form-switch-lg">
+                    <input type="hidden" name="payment_payflex_product_widget" value="0"/>
+                    <input type="checkbox" name="payment_payflex_product_widget" value="1"
+                           id="input-product-widget" class="form-check-input"
+                           {% if payment_payflex_product_widget %} checked{% endif %}/>
+                  </div>
+                </div>
+              </div>
+
+              {# Widget logo style #}
+              <div class="row mb-3">
+                <label for="input-widget-style" class="col-sm-3 col-form-label">{{ entry_widget_style }}</label>
+                <div class="col-sm-9">
+                  <select name="payment_payflex_widget_style" id="input-widget-style" class="form-select" style="width:200px">
+                    <option value="purple" {% if payment_payflex_widget_style == 'purple' %} selected{% endif %}>{{ text_widget_style_purple }}</option>
+                    <option value="navy"   {% if payment_payflex_widget_style == 'navy'   %} selected{% endif %}>{{ text_widget_style_navy }}</option>
+                  </select>
+                </div>
+              </div>
+
+              {# Widget theme #}
+              <div class="row mb-3">
+                <label for="input-widget-theme" class="col-sm-3 col-form-label">{{ entry_widget_theme }}</label>
+                <div class="col-sm-9">
+                  <select name="payment_payflex_widget_theme" id="input-widget-theme" class="form-select" style="width:200px">
+                    <option value=""     {% if payment_payflex_widget_theme == ''     %} selected{% endif %}>{{ text_widget_theme_light }}</option>
+                    <option value="dark" {% if payment_payflex_widget_theme == 'dark' %} selected{% endif %}>{{ text_widget_theme_dark }}</option>
+                  </select>
+                </div>
+              </div>
+
+              {# Pay type #}
+              <div class="row mb-3">
+                <label for="input-widget-pay-type" class="col-sm-3 col-form-label">{{ entry_widget_pay_type }}</label>
+                <div class="col-sm-9">
+                  <select name="payment_payflex_widget_pay_type" id="input-widget-pay-type" class="form-select" style="width:200px">
+                    <option value="4" {% if payment_payflex_widget_pay_type == '4' %} selected{% endif %}>{{ text_widget_pay_type_4 }}</option>
+                    <option value="3" {% if payment_payflex_widget_pay_type == '3' %} selected{% endif %}>{{ text_widget_pay_type_3 }}</option>
+                  </select>
+                </div>
+              </div>
+
+              {# Merchant widget reference #}
+              <div class="row mb-3">
+                <label for="input-widget-merchant-ref" class="col-sm-3 col-form-label">{{ entry_widget_merchant_ref }}</label>
+                <div class="col-sm-9">
+                  <input type="text" name="payment_payflex_widget_merchant_ref"
+                         value="{{ payment_payflex_widget_merchant_ref }}"
+                         placeholder="{{ entry_widget_merchant_ref }}"
+                         id="input-widget-merchant-ref" class="form-control" style="width:300px"/>
+                  <div class="form-text">{{ help_widget_merchant_ref }}</div>
+                </div>
+              </div>
+
+            </div>{# /tab-widget #}
+
+            {# ── CRON ─────────────────────────────────────────────────────── #}
+            <div id="tab-cron" class="tab-pane">
+
+              {# CRON secret token #}
+              <div class="row mb-3 required">
+                <label for="input-cron-token" class="col-sm-3 col-form-label">{{ entry_cron_token }}</label>
+                <div class="col-sm-9">
+                  <input type="text" name="payment_payflex_cron_token"
+                         value="{{ payment_payflex_cron_token }}"
+                         placeholder="{{ entry_cron_token }}"
+                         id="input-cron-token" class="form-control"/>
+                  <div id="error-cron-token" class="invalid-feedback"></div>
+                  <div class="form-text">{{ help_cron_token }}</div>
+                </div>
+              </div>
+
+              {# CRON URL display #}
+              <div class="row mb-3">
+                <label class="col-sm-3 col-form-label">{{ help_cron_url }}</label>
+                <div class="col-sm-9">
+                  <input type="text" id="input-cron-url" class="form-control" readonly
+                         value="{{ cron_url }}"/>
+                  <div class="form-text">
+                    Add this URL to your server's cron job (recommended: every 5 minutes).
+                  </div>
+                </div>
+              </div>
+
+            </div>{# /tab-cron #}
+
+          </div>{# /tab-content #}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{{ footer }}

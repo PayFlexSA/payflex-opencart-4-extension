@@ -9,7 +9,7 @@ name: Build release package
 #
 # The archive is built here from scratch, deliberately NOT by calling
 # Payflex_output/create_zip.sh. That script is a developer convenience for
-# packaging against a live install and is not part of the release path — the
+# packaging against a live install and is not part of the release path. The
 # two must never drift into depending on each other.
 
 on:
@@ -26,7 +26,7 @@ env:
   # OpenCart derives an extension's code from the archive FILENAME
   # (admin/controller/marketplace/installer.php: basename($file, '.ocmod.zip'))
   # and extracts into extension/{code}/. This name must stay exactly as it is,
-  # with no version in it — "payflex-v0.1.0.ocmod.zip" would install to
+  # with no version in it. "payflex-v0.1.0.ocmod.zip" would install to
   # extension/payflex-v0.1.0/ and every route would 404. The version is carried
   # by the git tag, the GitHub Release and install.json instead.
   PACKAGE_NAME: payflex.ocmod.zip
@@ -48,7 +48,7 @@ jobs:
           php-version: '8.1'
 
       # -----------------------------------------------------------------------
-      # Gate 1 — the manifest is valid and agrees with the package filename.
+      # Gate 1: the manifest is valid and agrees with the package filename.
       # -----------------------------------------------------------------------
       - name: Read and validate install.json
         id: extension
@@ -76,11 +76,26 @@ jobs:
             exit 1
           fi
 
+          # VERSION restates the version for humans and tooling. Nothing reads it
+          # at runtime, so it can silently drift from install.json, which is what
+          # OpenCart actually displays. Fail rather than ship a mismatch.
+          if [ ! -f VERSION ]; then
+            echo "::error::VERSION not found at the repository root."
+            exit 1
+          fi
+
+          version_file="$(tr -d '[:space:]' < VERSION)"
+
+          if [ "$version_file" != "$version" ]; then
+            echo "::error::VERSION says '$version_file' but $manifest says '$version'. Set both to the same value."
+            exit 1
+          fi
+
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Extension version: $version (code: $code)"
 
       # -----------------------------------------------------------------------
-      # Gate 2 — a tagged build must ship under the version it declares.
+      # Gate 2: a tagged build must ship under the version it declares.
       # -----------------------------------------------------------------------
       - name: Ensure the tag matches the extension version
         if: startsWith(github.ref, 'refs/tags/')
@@ -100,7 +115,7 @@ jobs:
           echo "Tag and install.json both say $VERSION."
 
       # -----------------------------------------------------------------------
-      # Gate 3 — the checkout actually contains a complete extension.
+      # Gate 3: the checkout actually contains a complete extension.
       # -----------------------------------------------------------------------
       - name: Check every required source file is present
         run: |
@@ -108,8 +123,8 @@ jobs:
 
           # This repo uses a whitelist .gitignore: everything is ignored, and
           # specific paths are re-added. A new source file that nobody un-ignored
-          # is never committed, and the package would ship silently incomplete —
-          # the merchant's install half-works and the cause is far from obvious.
+          # is never committed, and the package would ship silently incomplete.
+          # The merchant's install half-works and the cause is far from obvious.
           # Add new files to this list as the extension grows.
           required="
           install.json
@@ -134,14 +149,14 @@ jobs:
           done
 
           if [ "$missing" -ne 0 ]; then
-            echo "::error::Check .gitignore — a whitelist rule is probably missing for the file(s) above."
+            echo "::error::Check .gitignore, a whitelist rule is probably missing for the file(s) above."
             exit 1
           fi
 
           echo "All required files present."
 
       # -----------------------------------------------------------------------
-      # Gate 4 — no PHP syntax errors reach a release.
+      # Gate 4: no PHP syntax errors reach a release.
       # -----------------------------------------------------------------------
       - name: Lint the PHP sources
         run: |
@@ -156,15 +171,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Zip the CONTENTS of the source directory, not the directory itself:
+          # Stage rather than zip the checkout in place, so the licence can be
+          # added without mutating the working tree. GPL-3.0 requires recipients
+          # get a copy, and the zip is what merchants actually download.
+          staging="$(mktemp -d)"
+          cp -R "$SOURCE_DIR/." "$staging/"
+          cp LICENSE "$staging/LICENSE"
+
+          # Zip the CONTENTS of the staging directory, not the directory itself:
           # OC4 expects install.json, admin/ and catalog/ at the archive root.
-          ( cd "$SOURCE_DIR" && zip -rq "$GITHUB_WORKSPACE/$PACKAGE_NAME" . )
+          ( cd "$staging" && zip -rq "$GITHUB_WORKSPACE/$PACKAGE_NAME" . )
 
           echo "Package contents:"
           unzip -l "$PACKAGE_NAME"
 
       # -----------------------------------------------------------------------
-      # Gate 5 — the built archive has the layout OC4 expects.
+      # Gate 5: the built archive has the layout OC4 expects.
       # -----------------------------------------------------------------------
       - name: Verify the package layout
         run: |
@@ -176,7 +198,7 @@ jobs:
           # high nests everything under payflex/, and OC4 would then extract the
           # module to extension/payflex/payflex/.
           if ! printf '%s\n' "$entries" | grep -qx 'install.json'; then
-            echo "::error::install.json is not at the root of $PACKAGE_NAME — the archive is nested a level too deep."
+            echo "::error::install.json is not at the root of $PACKAGE_NAME, the archive is nested a level too deep."
             exit 1
           fi
 
@@ -184,7 +206,8 @@ jobs:
           # and the PSR-4 autoloader resolve against.
           for entry in \
             admin/controller/payment/payflex.php \
-            catalog/controller/payment/payflex.php; do
+            catalog/controller/payment/payflex.php \
+            LICENSE; do
             if ! printf '%s\n' "$entries" | grep -qx "$entry"; then
               echo "::error::$entry is missing from $PACKAGE_NAME."
               exit 1

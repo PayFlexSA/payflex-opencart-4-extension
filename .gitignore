@@ -9,8 +9,13 @@
 !.gitignore
 !CLAUDE.md
 
+# Project docs and metadata
+!README.md
+!LICENSE
+!VERSION
+
 # GitHub Actions. Git will not descend into an ignored directory, so every
-# level needs its own un-ignore rule — dropping any one of these three makes
+# level needs its own un-ignore rule, and dropping any one of these three makes
 # the workflow files invisible to `git add` and CI silently never runs.
 !.github/
 !.github/workflows/

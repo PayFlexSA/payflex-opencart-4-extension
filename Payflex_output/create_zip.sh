@@ -18,7 +18,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_DIR="$SCRIPT_DIR/../extension/payflex"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SOURCE_DIR="$ROOT_DIR/extension/payflex"
 OUTPUT_DIR="$SCRIPT_DIR"
 
 # Colours
@@ -37,7 +38,7 @@ if [ ! -f "$SOURCE_DIR/install.json" ]; then
     exit 1
 fi
 
-# Read version from install.json (display only — see the filename note above).
+# Read version from install.json (display only, see the filename note above).
 # Plain POSIX sed rather than grep -P: the previous lookbehind pattern needs a
 # bounded-length assertion that ugrep rejects outright, and the "|| echo" guard
 # turned that failure into a silent fallback to a hardcoded version.
@@ -46,6 +47,17 @@ version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SO
 if [ -z "$version" ]; then
     echo -e "${RED}Error: could not read \"version\" from install.json${NC}"
     exit 1
+fi
+
+# Same check the release workflow runs, so a local build catches a version
+# mismatch before it reaches a tag.
+if [ -f "$ROOT_DIR/VERSION" ]; then
+    version_file=$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")
+
+    if [ "$version_file" != "$version" ]; then
+        echo -e "${RED}Error: VERSION says '$version_file' but install.json says '$version'${NC}"
+        exit 1
+    fi
 fi
 
 output="$OUTPUT_DIR/payflex.ocmod.zip"
@@ -58,8 +70,17 @@ echo -e "  Output  : ${YELLOW}$output${NC}"
 # Remove any previous build with the same name
 [ -f "$output" ] && rm "$output"
 
-# Zip the contents of extension/payflex/ (not the folder itself)
-cd "$SOURCE_DIR"
+# Stage rather than zip the source tree in place, so the licence can be added
+# without leaving a stray file behind in the working copy. Matches what the
+# release workflow builds.
+staging="$(mktemp -d)"
+trap 'rm -rf "$staging"' EXIT
+
+cp -R "$SOURCE_DIR/." "$staging/"
+[ -f "$ROOT_DIR/LICENSE" ] && cp "$ROOT_DIR/LICENSE" "$staging/LICENSE"
+
+# Zip the contents of the staging dir (not the folder itself)
+cd "$staging"
 zip -rq "$output" .
 
 echo -e "${GREEN}Package contents:${NC}"

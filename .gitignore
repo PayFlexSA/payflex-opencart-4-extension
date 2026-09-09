@@ -9,6 +9,13 @@
 !.gitignore
 !CLAUDE.md
 
+# GitHub Actions. Git will not descend into an ignored directory, so every
+# level needs its own un-ignore rule — dropping any one of these three makes
+# the workflow files invisible to `git add` and CI silently never runs.
+!.github/
+!.github/workflows/
+!.github/workflows/**
+
 # Payflex_output (only the script, not any built zips)
 !Payflex_output/
 !Payflex_output/create_zip.sh

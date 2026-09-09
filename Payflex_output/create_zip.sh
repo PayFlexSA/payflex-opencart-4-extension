@@ -8,7 +8,12 @@
 #   admin/
 #   catalog/
 #
-# Output: Payflex_output/payflex-v{version}.ocmod.zip
+# Output: Payflex_output/payflex.ocmod.zip
+#
+# The filename is NOT versioned. OC4 derives the extension code from the
+# archive's filename (installer.php: basename($filename, '.ocmod.zip')) and
+# extracts into extension/{code}/, so anything other than "payflex.ocmod.zip"
+# installs to the wrong directory and every route 404s.
 
 set -e
 
@@ -32,9 +37,18 @@ if [ ! -f "$SOURCE_DIR/install.json" ]; then
     exit 1
 fi
 
-# Read version from install.json
-version=$(grep -oP '(?<="version":\s*")[^"]+' "$SOURCE_DIR/install.json" || echo "1.0.0")
-output="$OUTPUT_DIR/payflex-v${version}.ocmod.zip"
+# Read version from install.json (display only — see the filename note above).
+# Plain POSIX sed rather than grep -P: the previous lookbehind pattern needs a
+# bounded-length assertion that ugrep rejects outright, and the "|| echo" guard
+# turned that failure into a silent fallback to a hardcoded version.
+version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$SOURCE_DIR/install.json" | head -n1)
+
+if [ -z "$version" ]; then
+    echo -e "${RED}Error: could not read \"version\" from install.json${NC}"
+    exit 1
+fi
+
+output="$OUTPUT_DIR/payflex.ocmod.zip"
 
 echo -e "${GREEN}Building Payflex OC4 extension...${NC}"
 echo -e "  Version : ${YELLOW}$version${NC}"

@@ -1,0 +1,212 @@
+name: Build release package
+
+# Builds the OpenCart 4 extension package (payflex.ocmod.zip).
+#
+# - Push a version tag (e.g. v0.1.0) to build the package and attach it to the
+#   matching GitHub Release.
+# - Run manually (workflow_dispatch) from any branch to build and download the
+#   package as a workflow artifact for testing, without touching Releases.
+#
+# The archive is built here from scratch, deliberately NOT by calling
+# Payflex_output/create_zip.sh. That script is a developer convenience for
+# packaging against a live install and is not part of the release path — the
+# two must never drift into depending on each other.
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # OpenCart derives an extension's code from the archive FILENAME
+  # (admin/controller/marketplace/installer.php: basename($file, '.ocmod.zip'))
+  # and extracts into extension/{code}/. This name must stay exactly as it is,
+  # with no version in it — "payflex-v0.1.0.ocmod.zip" would install to
+  # extension/payflex-v0.1.0/ and every route would 404. The version is carried
+  # by the git tag, the GitHub Release and install.json instead.
+  PACKAGE_NAME: payflex.ocmod.zip
+  EXTENSION_CODE: payflex
+  SOURCE_DIR: extension/payflex
+
+jobs:
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      # -----------------------------------------------------------------------
+      # Gate 1 — the manifest is valid and agrees with the package filename.
+      # -----------------------------------------------------------------------
+      - name: Read and validate install.json
+        id: extension
+        run: |
+          set -euo pipefail
+
+          manifest="$SOURCE_DIR/install.json"
+
+          if [ ! -f "$manifest" ]; then
+            echo "::error::$manifest not found."
+            exit 1
+          fi
+
+          # jq parses and validates in one go, so a malformed install.json fails
+          # here rather than after a merchant has uploaded the package. -e makes
+          # a missing or null key a non-zero exit instead of the string "null".
+          version="$(jq -er '.version' "$manifest")"
+          code="$(jq -er '.code' "$manifest")"
+
+          # OC4 ignores install.json's "code" in favour of the filename, so the
+          # two can silently disagree. Catch that here to keep the manifest
+          # honest about where the extension actually installs.
+          if [ "$code" != "$EXTENSION_CODE" ]; then
+            echo "::error::install.json declares code '$code', but the package ships as $PACKAGE_NAME, which OC4 installs as '$EXTENSION_CODE'."
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Extension version: $version (code: $code)"
+
+      # -----------------------------------------------------------------------
+      # Gate 2 — a tagged build must ship under the version it declares.
+      # -----------------------------------------------------------------------
+      - name: Ensure the tag matches the extension version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          VERSION: ${{ steps.extension.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME#v}"
+
+          if [ "$tag" != "$VERSION" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match the version in install.json ('$VERSION')."
+            echo "::error::Set \"version\" in $SOURCE_DIR/install.json to $tag, or re-tag, then try again."
+            exit 1
+          fi
+
+          echo "Tag and install.json both say $VERSION."
+
+      # -----------------------------------------------------------------------
+      # Gate 3 — the checkout actually contains a complete extension.
+      # -----------------------------------------------------------------------
+      - name: Check every required source file is present
+        run: |
+          set -euo pipefail
+
+          # This repo uses a whitelist .gitignore: everything is ignored, and
+          # specific paths are re-added. A new source file that nobody un-ignored
+          # is never committed, and the package would ship silently incomplete —
+          # the merchant's install half-works and the cause is far from obvious.
+          # Add new files to this list as the extension grows.
+          required="
+          install.json
+          admin/controller/payment/payflex.php
+          admin/language/en-gb/payment/payflex.php
+          admin/view/template/payment/payflex.twig
+          catalog/controller/payment/payflex.php
+          catalog/language/en-gb/payment/payflex.php
+          catalog/model/payment/payflex.php
+          catalog/view/template/payment/payflex.twig
+          catalog/view/template/payment/payflex_widget.twig
+          "
+
+          missing=0
+
+          # Unquoted on purpose: word-splitting turns the list into arguments.
+          for file in $required; do
+            if [ ! -f "$SOURCE_DIR/$file" ]; then
+              echo "::error::Missing required file: $SOURCE_DIR/$file"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Check .gitignore — a whitelist rule is probably missing for the file(s) above."
+            exit 1
+          fi
+
+          echo "All required files present."
+
+      # -----------------------------------------------------------------------
+      # Gate 4 — no PHP syntax errors reach a release.
+      # -----------------------------------------------------------------------
+      - name: Lint the PHP sources
+        run: |
+          set -euo pipefail
+
+          find "$SOURCE_DIR" -name '*.php' -print0 | xargs -0 -r -n1 php -l
+
+      # -----------------------------------------------------------------------
+      # Build.
+      # -----------------------------------------------------------------------
+      - name: Build the package
+        run: |
+          set -euo pipefail
+
+          # Zip the CONTENTS of the source directory, not the directory itself:
+          # OC4 expects install.json, admin/ and catalog/ at the archive root.
+          ( cd "$SOURCE_DIR" && zip -rq "$GITHUB_WORKSPACE/$PACKAGE_NAME" . )
+
+          echo "Package contents:"
+          unzip -l "$PACKAGE_NAME"
+
+      # -----------------------------------------------------------------------
+      # Gate 5 — the built archive has the layout OC4 expects.
+      # -----------------------------------------------------------------------
+      - name: Verify the package layout
+        run: |
+          set -euo pipefail
+
+          entries="$(unzip -Z1 "$PACKAGE_NAME")"
+
+          # install.json must sit at the archive root. Zipping one directory too
+          # high nests everything under payflex/, and OC4 would then extract the
+          # module to extension/payflex/payflex/.
+          if ! printf '%s\n' "$entries" | grep -qx 'install.json'; then
+            echo "::error::install.json is not at the root of $PACKAGE_NAME — the archive is nested a level too deep."
+            exit 1
+          fi
+
+          # Spot-check both controllers, since these are the paths the routes
+          # and the PSR-4 autoloader resolve against.
+          for entry in \
+            admin/controller/payment/payflex.php \
+            catalog/controller/payment/payflex.php; do
+            if ! printf '%s\n' "$entries" | grep -qx "$entry"; then
+              echo "::error::$entry is missing from $PACKAGE_NAME."
+              exit 1
+            fi
+          done
+
+          echo "Archive layout is correct."
+
+      # -----------------------------------------------------------------------
+      # Publish. The artifact name carries the version; the file inside it keeps
+      # the exact name OC4 requires.
+      # -----------------------------------------------------------------------
+      - name: Upload the package as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: payflex-${{ steps.extension.outputs.version }}
+          path: ${{ env.PACKAGE_NAME }}
+          if-no-files-found: error
+
+      - name: Attach the package to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.PACKAGE_NAME }}
+          fail_on_unmatched_files: true

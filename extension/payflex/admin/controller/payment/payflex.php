@@ -198,6 +198,13 @@ class Payflex extends \Opencart\System\Engine\Controller {
             } else {
                 $release = $this->fetchLatestRelease();
 
+                // A failed check keeps the last known release, so a transient
+                // GitHub error does not hide an update the store already knows about.
+                if ($release['error'] !== '') {
+                    $release['version'] = (string)($cache['payflex_update_latest_version'] ?? '');
+                    $release['url']     = (string)($cache['payflex_update_url'] ?? '');
+                }
+
                 // Failures are cached too, otherwise a firewalled or rate limited
                 // store would retry on every admin page load.
                 $this->model_setting_setting->editSetting('payflex_update', [
@@ -230,13 +237,6 @@ class Payflex extends \Opencart\System\Engine\Controller {
             ];
         }
 
-        if ($release['error'] !== '') {
-            return [
-                'status' => 'error',
-                'text'   => sprintf($this->language->get('text_update_failed'), $this->describeUpdateError($release['error'])),
-            ];
-        }
-
         if (version_compare($release['version'], $current, '>')) {
             return [
                 'status'  => 'update',
@@ -245,6 +245,13 @@ class Payflex extends \Opencart\System\Engine\Controller {
                 // The URL ends up in an href, so only ever hand back a github.com
                 // address. Checked here so it covers the cached path as well.
                 'url'     => strpos($release['url'], 'https://github.com/') === 0 ? $release['url'] : self::UPDATE_RELEASE_URL,
+            ];
+        }
+
+        if ($release['error'] !== '') {
+            return [
+                'status' => 'error',
+                'text'   => sprintf($this->language->get('text_update_failed'), $this->describeUpdateError($release['error'])),
             ];
         }
 

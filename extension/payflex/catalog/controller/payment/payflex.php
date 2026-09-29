@@ -312,17 +312,11 @@ class Payflex extends \Opencart\System\Engine\Controller {
             return;
         }
 
-        $merchant_ref = $this->config->get('payment_payflex_widget_merchant_ref');
-        $style        = $this->config->get('payment_payflex_widget_style') ?: 'purple';
-        $theme        = $this->config->get('payment_payflex_widget_theme') ?: '';
-        $pay_type     = $this->config->get('payment_payflex_widget_pay_type') ?: '4';
+        $style    = $this->config->get('payment_payflex_widget_style') ?: 'purple';
+        $theme    = $this->config->get('payment_payflex_widget_theme') ?: '';
+        $pay_type = $this->config->get('payment_payflex_widget_pay_type') ?: '4';
 
-        // Build the widget script base URL
-        if ($merchant_ref) {
-            $widget_base = 'https://widgets.payflex.co.za/' . rawurlencode($merchant_ref) . '/2.0.3/payflex-widget.js';
-        } else {
-            $widget_base = 'https://widgets.payflex.co.za/2.0.3/payflex-widget.js';
-        }
+        $widget_base = 'https://widgets.payflex.co.za/2.0.3/payflex-widget.js';
 
         // Build query params; amount=0 is a placeholder that the JS replaces immediately.
         // Note: do NOT use array_filter() here — it would strip '0' as falsy.

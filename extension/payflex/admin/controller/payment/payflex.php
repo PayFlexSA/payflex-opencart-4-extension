@@ -50,8 +50,17 @@ class Payflex extends \Opencart\System\Engine\Controller {
         $data['rollback_version'] = $this->getVersion(DIR_EXTENSION . '.payflex-backup/');
         $data['button_update_rollback'] = sprintf($this->language->get('button_update_rollback'), $data['rollback_version']);
 
+        $data['error_upgrade'] = '';
+
         if ($this->user->hasPermission('modify', 'extension/payflex/payment/payflex')) {
-            $this->applyUpgrade();
+            // A failed upgrade must not take the page down with it, or the
+            // Restore button goes too. It runs again on the next page load.
+            try {
+                $this->applyUpgrade();
+            } catch (\Exception $e) {
+                $this->log->write('Payflex upgrade failed: ' . $e->getMessage());
+                $data['error_upgrade'] = $this->language->get('error_upgrade');
+            }
         }
 
         // --- Current setting values (fall back to sensible defaults) ---
@@ -73,7 +82,6 @@ class Payflex extends \Opencart\System\Engine\Controller {
             'payment_payflex_widget_style'            => 'purple',
             'payment_payflex_widget_theme'            => '',
             'payment_payflex_widget_pay_type'         => '4',
-            'payment_payflex_widget_merchant_ref'     => '',
         ];
 
         // Status ID fields must also fall back when saved as empty string, so use ?: not ??
@@ -92,15 +100,11 @@ class Payflex extends \Opencart\System\Engine\Controller {
                 : ($value ?? $default);  // null only -> fall back to default
         }
 
-        // Auto-generate the CRON token on first visit if not yet set
+        // Suggest a CRON token until one is saved. It is stored with the rest of
+        // the form on Save. Nothing is written here: editValue() only updates
+        // an existing row, and there is none before the first save.
         if (empty($data['payment_payflex_cron_token'])) {
             $data['payment_payflex_cron_token'] = bin2hex(random_bytes(20));
-            $this->load->model('setting/setting');
-            $this->model_setting_setting->editSettingValue(
-                'payment_payflex',
-                'payment_payflex_cron_token',
-                $data['payment_payflex_cron_token']
-            );
         }
 
         // --- Order status dropdown ---

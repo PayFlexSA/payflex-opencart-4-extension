@@ -20,6 +20,10 @@
   </div>
 
   <div class="container-fluid">
+    {% if error_upgrade %}
+      <div class="alert alert-danger">{{ error_upgrade }}</div>
+    {% endif %}
+
     {# Update check. Filled in by JS after the page has rendered, so the
        settings page never waits on the GitHub request. #}
     <div id="payflex-update" class="alert alert-secondary d-flex align-items-center">
@@ -218,18 +222,6 @@
                     <option value="4" {% if payment_payflex_widget_pay_type == '4' %} selected{% endif %}>{{ text_widget_pay_type_4 }}</option>
                     <option value="3" {% if payment_payflex_widget_pay_type == '3' %} selected{% endif %}>{{ text_widget_pay_type_3 }}</option>
                   </select>
-                </div>
-              </div>
-
-              {# Merchant widget reference #}
-              <div class="row mb-3">
-                <label for="input-widget-merchant-ref" class="col-sm-3 col-form-label">{{ entry_widget_merchant_ref }}</label>
-                <div class="col-sm-9">
-                  <input type="text" name="payment_payflex_widget_merchant_ref"
-                         value="{{ payment_payflex_widget_merchant_ref }}"
-                         placeholder="{{ entry_widget_merchant_ref }}"
-                         id="input-widget-merchant-ref" class="form-control" style="width:300px"/>
-                  <div class="form-text">{{ help_widget_merchant_ref }}</div>
                 </div>
               </div>
 

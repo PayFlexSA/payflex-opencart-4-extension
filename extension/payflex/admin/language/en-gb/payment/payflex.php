@@ -40,7 +40,6 @@ $_['entry_product_widget']              = 'Enable Product Widget';
 $_['entry_widget_style']                = 'Widget Logo Style';
 $_['entry_widget_theme']                = 'Widget Theme';
 $_['entry_widget_pay_type']             = 'Payment Type';
-$_['entry_widget_merchant_ref']         = 'Merchant Widget Reference';
 
 // Widget options
 $_['text_widget_style_purple']          = 'Purple';
@@ -56,7 +55,6 @@ $_['help_cron_token']                   = 'A secret string that protects the CRO
 $_['help_cron_url']                     = 'CRON Endpoint URL';
 $_['help_client_id']                    = 'Provided by Payflex. Use sandbox credentials for testing.';
 $_['help_client_secret']                = 'Provided by Payflex. Keep this value secret.';
-$_['help_widget_merchant_ref']          = 'Optional. URL-safe slug provided by Payflex for custom widget branding.';
 
 // Errors
 $_['error_permission']                  = 'Warning: You do not have permission to modify Payflex settings.';
@@ -102,3 +100,4 @@ $_['error_update_package']              = 'The downloaded package is not a valid
 $_['error_update_swap']                 = 'The new files could not be moved into place. The current version is still installed.';
 $_['error_update_restore']              = 'The module folder could not be put back. Rename %s to %s on the server to restore the store.';
 $_['error_update_backup']               = 'There is no backup to restore.';
+$_['error_upgrade']                     = 'The Payflex database upgrade did not finish. The details are in the error log. It will be retried the next time this page loads.';

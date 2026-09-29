@@ -78,3 +78,27 @@ $_['error_update_network']              = 'GitHub could not be reached.';
 $_['error_update_http']                 = 'GitHub returned HTTP status %d.';
 $_['error_update_response']             = 'GitHub returned an unexpected response.';
 $_['error_update_manifest']             = 'The installed version could not be read from install.json.';
+
+// Update install and rollback
+$_['button_update_install']             = 'Install update';
+$_['button_update_rollback']            = 'Restore %s';
+$_['text_update_confirm']               = 'Install Payflex %s now? The current version is kept as a backup.';
+$_['text_rollback_confirm']             = 'Restore Payflex %s from the backup? The current version becomes the backup.';
+$_['text_update_working']               = 'Working, please do not leave this page...';
+$_['text_update_success']               = 'Payflex %s has been installed.';
+$_['text_rollback_success']             = 'Payflex %s has been restored.';
+$_['text_update_install_error']         = 'The request failed. Reload the page to see which version is installed.';
+
+// Update install and rollback failure reasons
+$_['error_update_link']                 = 'extension/payflex is a symlink or is missing, so it cannot be updated from here. Update it manually.';
+$_['error_update_writable']             = 'PHP cannot write to %s. Fix the file permissions or update manually.';
+$_['error_update_running']              = 'Another update is already running.';
+$_['error_update_zip']                  = 'The PHP zip extension is not installed. Update manually.';
+$_['error_update_none']                 = 'There is no newer version to install.';
+$_['error_update_asset']                = 'The release does not have a package with a digest attached yet. Try again in a few minutes.';
+$_['error_update_download']             = 'The package could not be downloaded from GitHub.';
+$_['error_update_digest']               = 'The downloaded package does not match the digest GitHub published for it.';
+$_['error_update_package']              = 'The downloaded package is not a valid Payflex package.';
+$_['error_update_swap']                 = 'The new files could not be moved into place. The current version is still installed.';
+$_['error_update_restore']              = 'The module folder could not be put back. Rename %s to %s on the server to restore the store.';
+$_['error_update_backup']               = 'There is no backup to restore.';

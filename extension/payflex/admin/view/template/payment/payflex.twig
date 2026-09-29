@@ -25,6 +25,10 @@
     <div id="payflex-update" class="alert alert-secondary d-flex align-items-center">
       <span id="payflex-update-text" class="me-auto">{{ text_update_checking }}</span>
       <a id="payflex-update-link" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-primary ms-2 d-none">{{ button_update_view }}</a>
+      <button type="button" id="payflex-update-install" class="btn btn-sm btn-warning ms-2 d-none">{{ button_update_install }}</button>
+      {% if rollback_version %}
+        <button type="button" id="payflex-update-rollback" class="btn btn-sm btn-light ms-2">{{ button_update_rollback }}</button>
+      {% endif %}
       <button type="button" id="payflex-update-check" class="btn btn-sm btn-light ms-2">{{ button_update_check }}</button>
     </div>
 
@@ -274,6 +278,8 @@
     var text   = document.getElementById('payflex-update-text');
     var link   = document.getElementById('payflex-update-link');
     var button = document.getElementById('payflex-update-check');
+    var install  = document.getElementById('payflex-update-install');
+    var rollback = document.getElementById('payflex-update-rollback');
 
     var classes = {'current': 'alert-success', 'update': 'alert-warning', 'error': 'alert-secondary'};
 
@@ -296,6 +302,13 @@
             } else {
                 link.classList.add('d-none');
             }
+
+            if (json.status === 'update') {
+                install.dataset.version = json.version;
+                install.classList.remove('d-none');
+            } else {
+                install.classList.add('d-none');
+            }
         }).catch(function () {
             show('error', '{{ text_update_error|escape('js') }}');
         }).then(function () {
@@ -308,6 +321,51 @@
         show('checking', '{{ text_update_checking|escape('js') }}');
         check(true);
     });
+
+    // Installs or restores on the server, then reloads so the page comes from
+    // the code now in place. That first load also runs the database upgrade.
+    function run(url, message) {
+        if (!confirm(message)) {
+            return;
+        }
+
+        button.disabled = install.disabled = true;
+
+        if (rollback) {
+            rollback.disabled = true;
+        }
+
+        show('checking', '{{ text_update_working|escape('js') }}');
+
+        fetch(url, {method: 'POST'}).then(function (response) {
+            return response.json();
+        }).then(function (json) {
+            if (json.success) {
+                show('current', json.success);
+                window.location.reload();
+            } else {
+                show('error', json.error);
+            }
+        }).catch(function () {
+            show('error', '{{ text_update_install_error|escape('js') }}');
+        }).then(function () {
+            button.disabled = install.disabled = false;
+
+            if (rollback) {
+                rollback.disabled = false;
+            }
+        });
+    }
+
+    install.addEventListener('click', function () {
+        run('{{ install_update|escape('js') }}', '{{ text_update_confirm|escape('js') }}'.replace('%s', install.dataset.version));
+    });
+
+    if (rollback) {
+        rollback.addEventListener('click', function () {
+            run('{{ rollback|escape('js') }}', '{{ text_rollback_confirm|escape('js') }}'.replace('%s', '{{ rollback_version|escape('js') }}'));
+        });
+    }
 
     check(false);
 })();

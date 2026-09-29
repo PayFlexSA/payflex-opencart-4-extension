@@ -20,3 +20,4 @@ $_['error_callback']            = 'Payment could not be verified. Please try aga
 $_['text_payment_declined']     = 'Your Payflex payment was declined. Please try again or use a different payment method.';
 $_['text_payment_cancelled']    = 'Your Payflex payment was cancelled.';
 $_['text_payment_abandoned']    = 'Your Payflex session expired. Please try again.';
+$_['text_continue']             = 'Continue';

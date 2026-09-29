@@ -157,6 +157,18 @@ class Payflex extends \Opencart\System\Engine\Controller {
             return;
         }
 
+        // OpenCart sends its session cookie with SameSite=Strict by default, so
+        // the browser leaves it off this redirect from Payflex. OpenCart then
+        // starts an empty session and would overwrite the customer's cookie
+        // with it, losing their cart and any message shown to them. Load this
+        // URL again from our own page instead, which the browser treats as
+        // same-site, so the original cookie comes back. The bounce flag stops
+        // a loop when the browser has no session cookie at all.
+        if (!isset($this->request->cookie[$this->config->get('session_name')]) && empty($this->request->get['bounce'])) {
+            $this->bounce($order_id, $incoming_status);
+            return;
+        }
+
         $payflex_record = $this->model_extension_payflex_payment_payflex->getPayflexOrder($order_id);
 
         if (!$payflex_record) {
@@ -187,7 +199,7 @@ class Payflex extends \Opencart\System\Engine\Controller {
 
             default:
                 // Status is still 'Created' or unknown – send back to checkout
-                $this->redirectToCheckout('Unable to confirm your payment status. Please try again.');
+                $this->redirectToCart('Unable to confirm your payment status. Please try again.');
                 break;
         }
     }
@@ -385,7 +397,7 @@ class Payflex extends \Opencart\System\Engine\Controller {
             );
         }
 
-        $this->redirectToCheckout($message);
+        $this->redirectToCart($message);
     }
 
     /**
@@ -408,20 +420,35 @@ class Payflex extends \Opencart\System\Engine\Controller {
         return $defaults[$key] ?? 0;
     }
 
-    private function redirectToCart(): void {
-        $this->response->redirect(
-            $this->url->link('checkout/cart', 'language=' . $this->config->get('config_language'), true)
-        );
-    }
-
-    private function redirectToCheckout(string $error = ''): void {
+    /**
+     * The cart is the only OpenCart page that shows session['error'], so
+     * failures come back here rather than to the checkout page.
+     */
+    private function redirectToCart(string $error = ''): void {
         if ($error) {
             $this->session->data['error'] = $error;
         }
 
         $this->response->redirect(
-            $this->url->link('checkout/checkout', 'language=' . $this->config->get('config_language'), true)
+            $this->url->link('checkout/cart', 'language=' . $this->config->get('config_language'), true)
         );
+    }
+
+    /**
+     * Returns a page that reloads the callback from this site. See callback().
+     */
+    private function bounce(int $order_id, string $status): void {
+        // Drops the cookie for the empty session OpenCart just started, so the
+        // browser keeps the customer's original one.
+        header_remove('Set-Cookie');
+
+        $url = htmlspecialchars($this->url->link(
+            'extension/payflex/payment/payflex.callback',
+            'language=' . $this->config->get('config_language') . '&order_id=' . $order_id . '&status=' . $status . '&bounce=1',
+            true
+        ), ENT_QUOTES);
+
+        $this->response->setOutput('<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta http-equiv="refresh" content="0;url=' . $url . '"></head><body><a href="' . $url . '">' . $this->language->get('text_continue') . '</a></body></html>');
     }
 
     /**

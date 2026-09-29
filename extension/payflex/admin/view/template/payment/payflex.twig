@@ -20,6 +20,14 @@
   </div>
 
   <div class="container-fluid">
+    {# Update check. Filled in by JS after the page has rendered, so the
+       settings page never waits on the GitHub request. #}
+    <div id="payflex-update" class="alert alert-secondary d-flex align-items-center">
+      <span id="payflex-update-text" class="me-auto">{{ text_update_checking }}</span>
+      <a id="payflex-update-link" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-primary ms-2 d-none">{{ button_update_view }}</a>
+      <button type="button" id="payflex-update-check" class="btn btn-sm btn-light ms-2">{{ button_update_check }}</button>
+    </div>
+
     <div class="card">
       <div class="card-header">
         <i class="fa-solid fa-pencil"></i> {{ text_edit }}
@@ -259,4 +267,49 @@
     </div>
   </div>
 </div>
+
+<script type="text/javascript">
+(function () {
+    var box    = document.getElementById('payflex-update');
+    var text   = document.getElementById('payflex-update-text');
+    var link   = document.getElementById('payflex-update-link');
+    var button = document.getElementById('payflex-update-check');
+
+    var classes = {'current': 'alert-success', 'update': 'alert-warning', 'error': 'alert-secondary'};
+
+    function show(status, message) {
+        text.textContent = message;
+        box.className = 'alert d-flex align-items-center ' + (classes[status] || 'alert-secondary');
+    }
+
+    function check(force) {
+        button.disabled = true;
+
+        fetch('{{ check_update|escape('js') }}' + (force ? '&force=1' : '')).then(function (response) {
+            return response.json();
+        }).then(function (json) {
+            show(json.status, json.text);
+
+            if (json.status === 'update' && json.url) {
+                link.href = json.url;
+                link.classList.remove('d-none');
+            } else {
+                link.classList.add('d-none');
+            }
+        }).catch(function () {
+            show('error', '{{ text_update_error|escape('js') }}');
+        }).then(function () {
+            button.disabled = false;
+        });
+    }
+
+    // "Check now" bypasses the 12 hour cache.
+    button.addEventListener('click', function () {
+        show('checking', '{{ text_update_checking|escape('js') }}');
+        check(true);
+    });
+
+    check(false);
+})();
+</script>
 {{ footer }}

@@ -7,10 +7,11 @@ namespace Opencart\Admin\Controller\Extension\Payflex\Payment;
  * Provides the settings page in the OC4 admin and handles install/uninstall.
  *
  * Routes:
- *   extension/payflex/payment/payflex         → index()
- *   extension/payflex/payment/payflex.save    → save()
- *   extension/payflex/payment/payflex.install → install()
- *   extension/payflex/payment/payflex.uninstall → uninstall()
+ *   extension/payflex/payment/payflex         -> index()
+ *   extension/payflex/payment/payflex.save    -> save()
+ *   extension/payflex/payment/payflex.install -> install()
+ *   extension/payflex/payment/payflex.uninstall -> uninstall()
+ *   extension/payflex/payment/payflex.checkUpdate -> checkUpdate()
  */
 class Payflex extends \Opencart\System\Engine\Controller {
 
@@ -39,6 +40,8 @@ class Payflex extends \Opencart\System\Engine\Controller {
 
         $data['save'] = $this->url->link('extension/payflex/payment/payflex.save', 'user_token=' . $this->session->data['user_token']);
         $data['back'] = $this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'] . '&type=payment');
+        // Passed as a JS URL (third argument), so the ampersands are not HTML encoded.
+        $data['check_update'] = $this->url->link('extension/payflex/payment/payflex.checkUpdate', 'user_token=' . $this->session->data['user_token'], true);
 
         // --- Current setting values (fall back to sensible defaults) ---
 
@@ -74,8 +77,8 @@ class Payflex extends \Opencart\System\Engine\Controller {
         foreach ($settings as $key => $default) {
             $value = $this->config->get($key);
             $data[$key] = in_array($key, $status_id_keys, true)
-                ? ($value ?: $default)   // empty string → fall back to default
-                : ($value ?? $default);  // null only → fall back to default
+                ? ($value ?: $default)   // empty string -> fall back to default
+                : ($value ?? $default);  // null only -> fall back to default
         }
 
         // Auto-generate the CRON token on first visit if not yet set
@@ -146,6 +149,202 @@ class Payflex extends \Opencart\System\Engine\Controller {
 
         $this->response->addHeader('Content-Type: application/json');
         $this->response->setOutput(json_encode($json));
+    }
+
+    // -------------------------------------------------------------------------
+    // Update Check (AJAX)
+    // -------------------------------------------------------------------------
+
+    // The repo is public, so no auth token is needed. /releases/latest already
+    // excludes drafts and prereleases.
+    private const UPDATE_API_URL = 'https://api.github.com/repos/PayFlexSA/payflex-opencart-4-extension/releases/latest';
+    private const UPDATE_RELEASE_URL = 'https://github.com/PayFlexSA/payflex-opencart-4-extension/releases';
+
+    // Unauthenticated GitHub API calls are capped at 60 per hour per IP.
+    private const UPDATE_CACHE_TTL = 43200; // 12 hours
+
+    /**
+     * Reports whether a newer release exists on GitHub.
+     * Detection only. Nothing is downloaded or installed.
+     *
+     * Add &force=1 to bypass the cache.
+     */
+    public function checkUpdate(): void {
+        $this->load->language('extension/payflex/payment/payflex');
+
+        $json = [];
+
+        if (!$this->user->hasPermission('access', 'extension/payflex/payment/payflex')) {
+            $json['status'] = 'error';
+            $json['text']   = $this->language->get('error_permission');
+        } else {
+            $this->load->model('setting/setting');
+
+            // Kept under its own setting code on purpose: editSetting() deletes the
+            // whole code group before reinserting, so anything stored under
+            // payment_payflex would be wiped every time the settings form is saved.
+            $cache = $this->model_setting_setting->getSetting('payflex_update');
+
+            $cached = empty($this->request->get['force'])
+                && !empty($cache['payflex_update_last_check'])
+                && (time() - (int)$cache['payflex_update_last_check']) < self::UPDATE_CACHE_TTL;
+
+            if ($cached) {
+                $release = [
+                    'version' => (string)($cache['payflex_update_latest_version'] ?? ''),
+                    'url'     => (string)($cache['payflex_update_url'] ?? ''),
+                    'error'   => (string)($cache['payflex_update_error'] ?? ''),
+                ];
+            } else {
+                $release = $this->fetchLatestRelease();
+
+                // Failures are cached too, otherwise a firewalled or rate limited
+                // store would retry on every admin page load.
+                $this->model_setting_setting->editSetting('payflex_update', [
+                    'payflex_update_last_check'     => (string)time(),
+                    'payflex_update_latest_version' => $release['version'],
+                    'payflex_update_url'            => $release['url'],
+                    'payflex_update_error'          => $release['error'],
+                ]);
+            }
+
+            $json = $this->buildUpdateResult($release);
+        }
+
+        $this->response->addHeader('Content-Type: application/json');
+        $this->response->setOutput(json_encode($json));
+    }
+
+    /**
+     * Turns a release lookup (fresh or cached) into the response payload.
+     * The comparison happens here rather than at fetch time so that a cached
+     * result stops reporting an update as soon as the module is upgraded.
+     */
+    private function buildUpdateResult(array $release): array {
+        $current = $this->getInstalledVersion();
+
+        if ($current === '') {
+            return [
+                'status' => 'error',
+                'text'   => sprintf($this->language->get('text_update_failed'), $this->language->get('error_update_manifest')),
+            ];
+        }
+
+        if ($release['error'] !== '') {
+            return [
+                'status' => 'error',
+                'text'   => sprintf($this->language->get('text_update_failed'), $this->describeUpdateError($release['error'])),
+            ];
+        }
+
+        if (version_compare($release['version'], $current, '>')) {
+            return [
+                'status'  => 'update',
+                'text'    => sprintf($this->language->get('text_update_available'), $release['version'], $current),
+                'version' => $release['version'],
+                // The URL ends up in an href, so only ever hand back a github.com
+                // address. Checked here so it covers the cached path as well.
+                'url'     => strpos($release['url'], 'https://github.com/') === 0 ? $release['url'] : self::UPDATE_RELEASE_URL,
+            ];
+        }
+
+        return [
+            'status' => 'current',
+            'text'   => sprintf($this->language->get('text_update_current'), $current),
+        ];
+    }
+
+    /**
+     * Queries the GitHub releases API.
+     * Returns the version and release page URL, or a short reason code in
+     * 'error' that describeUpdateError() renders for the admin.
+     */
+    private function fetchLatestRelease(): array {
+        $failure = ['version' => '', 'url' => '', 'error' => 'network'];
+
+        $ch = curl_init(self::UPDATE_API_URL);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTPHEADER     => ['Accept: application/vnd.github+json'],
+            // The GitHub API rejects requests that send no User-Agent.
+            CURLOPT_USERAGENT      => 'Payflex-OpenCart4',
+            // Deliberately short so a store that cannot reach GitHub fails fast.
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+
+        $result    = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($result === false) {
+            return $failure;
+        }
+
+        if ($http_code !== 200) {
+            $failure['error'] = 'http:' . (int)$http_code;
+
+            return $failure;
+        }
+
+        $release = json_decode((string)$result, true);
+
+        if (!is_array($release) || empty($release['tag_name'])) {
+            $failure['error'] = 'response';
+
+            return $failure;
+        }
+
+        return [
+            // Release tags are published as vX.Y.Z; version_compare needs the bare number.
+            'version' => preg_replace('/^v/i', '', trim((string)$release['tag_name'])),
+            'url'     => (string)($release['html_url'] ?? ''),
+            'error'   => '',
+        ];
+    }
+
+    /**
+     * Maps the stored reason code to a readable message. A code is cached
+     * rather than the finished sentence so a cached failure is still rendered
+     * in the language the admin is currently using.
+     */
+    private function describeUpdateError(string $error): string {
+        [$reason, $detail] = array_pad(explode(':', $error, 2), 2, '');
+
+        switch ($reason) {
+            case 'http':
+                return sprintf($this->language->get('error_update_http'), (int)$detail);
+
+            case 'response':
+                return $this->language->get('error_update_response');
+
+            default:
+                return $this->language->get('error_update_network');
+        }
+    }
+
+    /**
+     * The installed version is whatever install.json says.
+     * oc_extension_install.version is never updated by OpenCart after the first
+     * install, so it goes stale and cannot be used here.
+     */
+    private function getInstalledVersion(): string {
+        $file = DIR_EXTENSION . 'payflex/install.json';
+
+        if (!is_file($file)) {
+            return '';
+        }
+
+        $manifest = json_decode((string)file_get_contents($file), true);
+
+        if (!is_array($manifest) || empty($manifest['version'])) {
+            return '';
+        }
+
+        return trim((string)$manifest['version']);
     }
 
     // -------------------------------------------------------------------------

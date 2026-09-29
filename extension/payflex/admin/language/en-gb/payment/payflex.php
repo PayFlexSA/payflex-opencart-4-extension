@@ -63,3 +63,18 @@ $_['error_permission']                  = 'Warning: You do not have permission t
 $_['error_client_id']                   = 'Client ID is required.';
 $_['error_client_secret']               = 'Client Secret is required.';
 $_['error_cron_token']                  = 'A CRON secret token is required.';
+
+// Update check
+$_['text_update_checking']              = 'Checking for updates...';
+$_['text_update_current']               = 'Payflex %s is installed. This is the latest version.';
+$_['text_update_available']             = 'Payflex %s is available. You are running %s.';
+$_['text_update_failed']                = 'Could not check for Payflex updates: %s';
+$_['text_update_error']                 = 'Could not check for Payflex updates.';
+$_['button_update_check']               = 'Check now';
+$_['button_update_view']                = 'View release';
+
+// Update check failure reasons
+$_['error_update_network']              = 'GitHub could not be reached.';
+$_['error_update_http']                 = 'GitHub returned HTTP status %d.';
+$_['error_update_response']             = 'GitHub returned an unexpected response.';
+$_['error_update_manifest']             = 'The installed version could not be read from install.json.';
